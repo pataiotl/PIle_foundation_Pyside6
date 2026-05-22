@@ -39,6 +39,9 @@ class PandasTableModel(QAbstractTableModel):
     def set_editable(self, editable: bool) -> None:
         self._editable = editable
 
+    def is_editable(self) -> bool:
+        return self._editable
+
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._df.index)
 
@@ -64,9 +67,9 @@ class PandasTableModel(QAbstractTableModel):
                 return Qt.AlignRight | Qt.AlignVCenter
             return Qt.AlignLeft | Qt.AlignVCenter
         if role == Qt.ForegroundRole:
-            return QColor(17, 24, 39)
+            return QColor(17, 24, 39) if self._background_for_row(index.row()) is not None else QColor(248, 250, 252)
         if role == Qt.BackgroundRole and self._status_colors:
-            return self._background_for_row(index.row()) or QColor(248, 250, 252)
+            return self._background_for_row(index.row()) or QColor(0, 0, 0)
         return None
 
     def _background_for_row(self, row: int) -> Optional[QColor]:

@@ -173,18 +173,45 @@ class PileFoundationWindow(QMainWindow):
     def _apply_style(self) -> None:
         self.setStyleSheet(
             """
-            QMainWindow, QWidget { font-size: 12px; }
+            QMainWindow, QWidget {
+                font-size: 12px;
+                color: #f8fafc;
+                background: #000000;
+            }
             #titleLabel { font-size: 22px; font-weight: 700; }
             #sectionTitle { font-size: 16px; font-weight: 700; }
-            #subtitleLabel { color: #59606a; }
+            #subtitleLabel { color: #cbd5e1; }
             QGroupBox {
                 font-weight: 650;
-                border: 1px solid #d7dce2;
+                color: #f8fafc;
+                background: #000000;
+                border: 1px solid #64748b;
                 border-radius: 6px;
                 margin-top: 10px;
                 padding: 10px 8px 8px 8px;
             }
             QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }
+            QTabWidget::pane {
+                border: 1px solid #334155;
+                background: #000000;
+            }
+            QTabBar::tab {
+                color: #f8fafc;
+                background: #111827;
+                border: 1px solid #334155;
+                padding: 6px 12px;
+            }
+            QTabBar::tab:selected {
+                background: #1f2937;
+                border-bottom: 1px solid #1f2937;
+            }
+            QLineEdit, QComboBox, QAbstractSpinBox, QListWidget {
+                color: #f8fafc;
+                background: #111827;
+                border: 1px solid #475569;
+                border-radius: 4px;
+                padding: 3px 6px;
+            }
             QPushButton, QToolButton {
                 color: #f8fafc;
                 background: #374151;
@@ -215,31 +242,46 @@ class PileFoundationWindow(QMainWindow):
                 border-bottom: 1px solid #3f4650;
             }
             QTableView {
-                color: #111827;
-                background: #f8fafc;
-                alternate-background-color: #eef2f7;
-                gridline-color: #d8dee8;
+                color: #f8fafc;
+                background: #000000;
+                alternate-background-color: #050505;
+                gridline-color: #334155;
                 selection-background-color: #2563eb;
                 selection-color: #ffffff;
             }
             QHeaderView::section {
                 color: #f8fafc;
-                background: #30343a;
+                background: #1f2937;
                 border: 1px solid #4b5563;
                 padding: 4px;
             }
             QTextEdit {
-                color: #111827;
-                background: #f8fafc;
-                border: 1px solid #d7dce2;
+                color: #f8fafc;
+                background: #000000;
+                border: 1px solid #475569;
                 border-radius: 5px;
             }
             QLabel[metric="true"] {
-                color: #111827;
-                border: 1px solid #d7dce2;
+                color: #f8fafc;
+                border: 1px solid #475569;
                 border-radius: 6px;
-                background: #f8fafc;
+                background: #000000;
                 padding: 8px;
+            }
+            QScrollArea {
+                background: #000000;
+                border: none;
+            }
+            QScrollBar:horizontal, QScrollBar:vertical {
+                background: #111827;
+                border: 1px solid #334155;
+            }
+            QScrollBar::handle:horizontal, QScrollBar::handle:vertical {
+                background: #64748b;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:horizontal:hover, QScrollBar::handle:vertical:hover {
+                background: #94a3b8;
             }
             """
         )
@@ -397,6 +439,39 @@ class PileFoundationWindow(QMainWindow):
         columns += [col for col in df.columns if col not in columns]
         return df[columns]
 
+    @staticmethod
+    def _manual_load_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+        df = eng.normalize_manual_service_load_columns(df)
+        columns = [
+            "Group Name",
+            "D Ps (kN)",
+            "D Msx (kN-m)",
+            "D Msy (kN-m)",
+            "L Ps (kN)",
+            "L Msx (kN-m)",
+            "L Msy (kN-m)",
+            "D Factor",
+            "L Factor",
+        ]
+        return df[[col for col in columns if col in df.columns]]
+
+    @staticmethod
+    def _manual_geometry_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+        df = eng.normalize_manual_service_load_columns(df)
+        columns = [
+            "Group Name",
+            "No. Piles",
+            "Thickness (mm)",
+            "Pile Dia (mm)",
+            "Spacing X (mm)",
+            "Spacing Y (mm)",
+            "Edge (mm)",
+            "Pile Comp Cap (kN)",
+            "Pile Tension Cap (kN)",
+            "Joint IDs",
+        ]
+        return df[[col for col in columns if col in df.columns]]
+
     def _connect_input_updates(self) -> None:
         controls = [
             self.n_piles,
@@ -416,7 +491,7 @@ class PileFoundationWindow(QMainWindow):
 
     def _input_tab(self) -> QWidget:
         widget = QWidget()
-        widget.setMinimumWidth(1500)
+        widget.setMinimumWidth(980)
         widget.setMinimumHeight(1240)
         layout = QVBoxLayout(widget)
         layout.setSpacing(10)
@@ -452,7 +527,7 @@ class PileFoundationWindow(QMainWindow):
 
     def _manual_input_page(self) -> QWidget:
         page = QWidget()
-        page.setMinimumWidth(1450)
+        page.setMinimumWidth(940)
         layout = QVBoxLayout(page)
         button_row = QHBoxLayout()
         for text, slot in [
@@ -474,18 +549,28 @@ class PileFoundationWindow(QMainWindow):
         manual_caption.setObjectName("subtitleLabel")
         layout.addWidget(manual_caption)
 
-        self.manual_model = PandasTableModel(
-            self._manual_display_dataframe(eng.default_manual_foundations(self.current_geometry())),
+        default_manual = eng.default_manual_foundations(self.current_geometry())
+        self.manual_load_model = PandasTableModel(
+            self._manual_load_dataframe(default_manual),
             editable=True,
             header_aliases=self._manual_header_aliases(),
         )
-        self.manual_table = self._table_view(self.manual_model, min_height=560)
+        self.manual_geometry_model = PandasTableModel(
+            self._manual_geometry_dataframe(default_manual),
+            editable=True,
+            header_aliases=self._manual_header_aliases(),
+        )
+        self.manual_table = self._table_view(self.manual_load_model, min_height=220)
+        self.manual_geometry_table = self._table_view(self.manual_geometry_model, min_height=260)
+        layout.addWidget(QLabel("Service load input"))
         layout.addWidget(self.manual_table)
+        layout.addWidget(QLabel("Foundation geometry and pile capacity overrides"))
+        layout.addWidget(self.manual_geometry_table)
         return page
 
     def _sap_input_page(self) -> QWidget:
         page = QWidget()
-        page.setMinimumWidth(1450)
+        page.setMinimumWidth(1120)
         page.setMinimumHeight(900)
         layout = QVBoxLayout(page)
         file_row = QHBoxLayout()
@@ -741,7 +826,7 @@ class PileFoundationWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setWidget(widget)
         return scroll
@@ -751,7 +836,17 @@ class PileFoundationWindow(QMainWindow):
         table.setModel(model)
         table.setSortingEnabled(True)
         table.setAlternatingRowColors(True)
-        table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        if model.is_editable():
+            table.setSelectionBehavior(QAbstractItemView.SelectItems)
+            table.setEditTriggers(
+                QAbstractItemView.DoubleClicked
+                | QAbstractItemView.SelectedClicked
+                | QAbstractItemView.EditKeyPressed
+                | QAbstractItemView.AnyKeyPressed
+            )
+        else:
+            table.setSelectionBehavior(QAbstractItemView.SelectRows)
+            table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         table.setMinimumHeight(min_height)
         table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
@@ -764,14 +859,48 @@ class PileFoundationWindow(QMainWindow):
         table.horizontalHeader().setMinimumSectionSize(90)
         table.horizontalHeader().setStretchLastSection(False)
         table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        model.dataframeChanged.connect(lambda _df, table=table: self._apply_table_column_widths(table))
+        self._apply_table_column_widths(table)
         return table
+
+    def _apply_table_column_widths(self, table: QTableView) -> None:
+        model = table.model()
+        if not isinstance(model, PandasTableModel):
+            return
+        df = model.dataframe
+        if df.empty:
+            return
+        for section, column in enumerate(df.columns):
+            name = str(column).lower()
+            width = 140
+            if "note" in name:
+                width = 950
+            elif "check" in name:
+                width = 260
+            elif "joint ids" in name:
+                width = 300
+            elif "group name" in name:
+                width = 190
+            elif "outputcase" in name or "combo" in name or "combination" in name:
+                width = 190
+            elif "geometry warnings" in name or "source" in name:
+                width = 260
+            elif "pile tension cap" in name or "pile comp cap" in name:
+                width = 190
+            elif "required" in name or "provided" in name or "capacity" in name:
+                width = 170
+            elif "ratio" in name or "d/c" in name or "status" in name:
+                width = 120
+            table.setColumnWidth(section, width)
 
     @staticmethod
     def _selected_rows(table: QTableView) -> list[int]:
         selection = table.selectionModel()
         if selection is None:
             return []
-        return [index.row() for index in selection.selectedRows()]
+        rows = {index.row() for index in selection.selectedRows()}
+        rows.update(index.row() for index in selection.selectedIndexes())
+        return sorted(rows)
 
     # ------------------------------------------------------------------
     # State builders
@@ -832,22 +961,55 @@ class PileFoundationWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def apply_geometry_to_manual_table(self) -> None:
-        self.manual_model.set_dataframe(
-            self._manual_display_dataframe(eng.apply_sidebar_geometry_to_groups(self.manual_model.dataframe, self.current_geometry()))
-        )
+        combined = self._manual_combined_dataframe()
+        updated = eng.apply_sidebar_geometry_to_groups(combined, self.current_geometry())
+        self._set_manual_tables(updated)
 
     def add_manual_row(self) -> None:
-        row = eng.group_defaults_from_geometry(self.current_geometry(), f"Foundation {len(self.manual_model.dataframe) + 1}", "")
+        row = eng.group_defaults_from_geometry(self.current_geometry(), f"Foundation {len(self.manual_load_model.dataframe) + 1}", "")
         row.update(eng.MANUAL_SERVICE_LOAD_DEFAULTS)
-        self.manual_model.insert_blank_rows(1, row)
+        combined = pd.concat([self._manual_combined_dataframe(), pd.DataFrame([row])], ignore_index=True)
+        self._set_manual_tables(combined)
 
     def duplicate_manual_row(self) -> None:
-        rows = self._selected_rows(self.manual_table)
+        rows = self._selected_manual_rows()
         if rows:
-            self.manual_model.copy_row(rows[0])
+            combined = self._manual_combined_dataframe()
+            combined = pd.concat([combined, combined.iloc[[rows[0]]].copy()], ignore_index=True)
+            self._set_manual_tables(combined)
 
     def remove_manual_rows(self) -> None:
-        self.manual_model.remove_rows(self._selected_rows(self.manual_table))
+        rows = self._selected_manual_rows()
+        if not rows:
+            return
+        combined = self._manual_combined_dataframe().drop(self._manual_combined_dataframe().index[rows]).reset_index(drop=True)
+        self._set_manual_tables(combined)
+
+    def _selected_manual_rows(self) -> list[int]:
+        rows = self._selected_rows(self.manual_table)
+        if not rows:
+            rows = self._selected_rows(self.manual_geometry_table)
+        return rows
+
+    def _manual_combined_dataframe(self) -> pd.DataFrame:
+        loads = self.manual_load_model.dataframe.reset_index(drop=True)
+        geometry = self.manual_geometry_model.dataframe.reset_index(drop=True)
+        row_count = max(len(loads), len(geometry))
+        loads = loads.reindex(range(row_count))
+        geometry = geometry.reindex(range(row_count))
+        combined = loads.copy()
+        for col in geometry.columns:
+            if col == "Group Name" and col in combined.columns:
+                combined[col] = combined[col].fillna(geometry[col])
+            else:
+                combined[col] = geometry[col]
+        combined = combined.fillna("")
+        return eng.normalize_manual_service_load_columns(eng.ensure_group_columns(combined, self.current_geometry()))
+
+    def _set_manual_tables(self, df: pd.DataFrame) -> None:
+        df = eng.normalize_manual_service_load_columns(eng.ensure_group_columns(df, self.current_geometry()))
+        self.manual_load_model.set_dataframe(self._manual_load_dataframe(df))
+        self.manual_geometry_model.set_dataframe(self._manual_geometry_dataframe(df))
 
     def apply_geometry_to_sap_groups(self) -> None:
         self.sap_groups_model.set_dataframe(eng.apply_sidebar_geometry_to_groups(self.sap_groups_model.dataframe, self.current_geometry()))
@@ -951,7 +1113,7 @@ class PileFoundationWindow(QMainWindow):
 
         if mode == "manual":
             payload = {
-                "groups": self.manual_model.dataframe,
+                "groups": self._manual_combined_dataframe(),
                 "mat": mat,
                 "base_geom": geom,
                 "reinf": reinf,
@@ -1038,7 +1200,7 @@ class PileFoundationWindow(QMainWindow):
         self.stm_notes.setText("\n".join(f"- {note}" for note in notes))
         report = eng.make_markdown_report(state, results)
         self.report_text.setPlainText(report)
-        self.calculation_text.setHtml(self._calculation_html(state, results))
+        self.calculation_text.setHtml(self._calculation_html(state, results, self.current_item))
         self.update_drawing()
 
     def _set_idle_result_state(self) -> None:
@@ -1048,7 +1210,7 @@ class PileFoundationWindow(QMainWindow):
         self.stm_notes.setText(message)
 
     @staticmethod
-    def _calculation_html(state: eng.DesignState, results: Dict[str, Any]) -> str:
+    def _calculation_html(state: eng.DesignState, results: Dict[str, Any], item: Optional[Dict[str, Any]] = None) -> str:
         geom = state.geometry
         mat = state.material
         reinf = state.reinforcement
@@ -1089,31 +1251,49 @@ class PileFoundationWindow(QMainWindow):
         def section(title: str, body: str) -> str:
             return f"<h2>{escape(title)}</h2>{body}"
 
-        xs_m = [eng.mm_to_m(p.x_mm) for p in state.piles]
-        ys_m = [eng.mm_to_m(p.y_mm) for p in state.piles]
+        service_runs = item.get("service_runs", []) if isinstance(item, dict) else []
+
+        def pile_capacity_ratio(run: Dict[str, Any]) -> float:
+            run_state = run.get("state")
+            if run_state is None:
+                return 0.0
+            max_comp_run = max([max(p.reaction_kN, 0.0) for p in run_state.piles] + [0.0])
+            max_uplift_run = max([max(-p.reaction_kN, 0.0) for p in run_state.piles] + [0.0])
+            return max(
+                max_comp_run / max(run_state.geometry.pile_capacity_comp_kN, 1e-9),
+                max_uplift_run / max(run_state.geometry.pile_capacity_tension_kN, 1e-9),
+            )
+
+        reaction_run = max(service_runs, key=pile_capacity_ratio) if service_runs else {"state": state, "results": results, "loadcase": state.loadcase.name}
+        reaction_state = reaction_run.get("state", state)
+        reaction_results = reaction_run.get("results", results)
+        reaction_loadcase_name = str(reaction_run.get("loadcase", reaction_state.loadcase.name))
+
+        xs_m = [eng.mm_to_m(p.x_mm) for p in reaction_state.piles]
+        ys_m = [eng.mm_to_m(p.y_mm) for p in reaction_state.piles]
         sum_x2 = sum(x * x for x in xs_m)
         sum_y2 = sum(y * y for y in ys_m)
-        max_comp = max([max(p.reaction_kN, 0.0) for p in state.piles] + [0.0])
-        max_uplift = max([max(-p.reaction_kN, 0.0) for p in state.piles] + [0.0])
+        max_comp = max([max(p.reaction_kN, 0.0) for p in reaction_state.piles] + [0.0])
+        max_uplift = max([max(-p.reaction_kN, 0.0) for p in reaction_state.piles] + [0.0])
         pile_env_df = results.get("pile_reaction_envelope")
         if isinstance(pile_env_df, pd.DataFrame) and not pile_env_df.empty:
             max_comp = float(pd.to_numeric(pile_env_df.get("Max compression (kN)"), errors="coerce").max())
             max_uplift = float(pd.to_numeric(pile_env_df.get("Max uplift (kN)"), errors="coerce").max())
 
-        pile_count = max(len(state.piles), 1)
-        p_total = float(results["Pu_total_kN"])
+        pile_count = max(len(reaction_state.piles), 1)
+        p_total = float(reaction_results.get("Pu_total_kN", reaction_state.loadcase.Pu_kN + reaction_state.self_weight_kN))
         base_reaction = p_total / pile_count
         cap_weight_calc = eng.self_weight_cap_kN(
-            state.cap_length_x_mm,
-            state.cap_width_y_mm,
+            reaction_state.cap_length_x_mm,
+            reaction_state.cap_width_y_mm,
             geom.cap_thickness_mm,
             mat.gamma_conc_kN_m3,
         )
-        mx = float(state.loadcase.Mux_kNm)
-        my = float(state.loadcase.Muy_kNm)
+        mx = float(reaction_state.loadcase.Mux_kNm)
+        my = float(reaction_state.loadcase.Muy_kNm)
         pile_calc_rows = []
         pile_formula_rows = []
-        for pile in state.piles:
+        for pile in reaction_state.piles:
             x_m = eng.mm_to_m(pile.x_mm)
             y_m = eng.mm_to_m(pile.y_mm)
             mx_component = mx * y_m / sum_y2 if abs(sum_y2) > 1e-12 else 0.0
@@ -1146,8 +1326,10 @@ class PileFoundationWindow(QMainWindow):
 
         common_rows = "".join(
             [
-                row("Load case", escape(state.loadcase.name), ""),
-                row("P_u total", n(results["Pu_total_kN"], 2), "kN"),
+                row("RC governing load case", escape(state.loadcase.name), ""),
+                row("RC P_u total", n(results["Pu_total_kN"], 2), "kN"),
+                row("Pile reaction service load case", escape(reaction_loadcase_name), ""),
+                row("Service P_s total", n(p_total, 2), "kN"),
                 row("f'c", n(mat.fc_MPa, 1), "MPa"),
                 row("f_y", n(mat.fy_MPa, 1), "MPa"),
                 row("Cap X x Y x h", f"{n(state.cap_length_x_mm, 0)} x {n(state.cap_width_y_mm, 0)} x {n(geom.cap_thickness_mm, 0)}", "mm"),
@@ -1159,31 +1341,34 @@ class PileFoundationWindow(QMainWindow):
 
         pile_body = f"""
             <div class='formula'>R<sub>i</sub> =
-            P/n + M<sub>x</sub> y<sub>i</sub> / &Sigma;y<sub>j</sub><sup>2</sup>
-            + M<sub>y</sub> x<sub>i</sub> / &Sigma;x<sub>j</sub><sup>2</sup></div>
+            P<sub>s</sub>/n + M<sub>sx</sub> y<sub>i</sub> / &Sigma;y<sub>j</sub><sup>2</sup>
+            + M<sub>sy</sub> x<sub>i</sub> / &Sigma;x<sub>j</sub><sup>2</sup></div>
             <p><b>Sign convention:</b> compression is positive. Coordinates x and y are converted from mm to m for the moment-distribution terms.</p>
+            <p><b>Load level:</b> pile reactions for pile compression/uplift are calculated from service loads.
+            Ultimate load effects are still used later for RC flexure, shear, punching, and bearing checks.</p>
+            <p><b>Service case used here:</b> {escape(reaction_loadcase_name)}.</p>
             <h3>Step 1 - Total vertical load used for pile reactions</h3>
             <div class='formula'>W<sub>cap</sub> = L<sub>x</sub>L<sub>y</sub>h&gamma;<sub>c</sub></div>
-            <p>W<sub>cap</sub> = ({n(state.cap_length_x_mm / 1000.0, 3)} m)({n(state.cap_width_y_mm / 1000.0, 3)} m)({n(geom.cap_thickness_mm / 1000.0, 3)} m)({n(mat.gamma_conc_kN_m3, 2)} kN/m<sup>3</sup>)
+            <p>W<sub>cap</sub> = ({n(reaction_state.cap_length_x_mm / 1000.0, 3)} m)({n(reaction_state.cap_width_y_mm / 1000.0, 3)} m)({n(geom.cap_thickness_mm / 1000.0, 3)} m)({n(mat.gamma_conc_kN_m3, 2)} kN/m<sup>3</sup>)
             = {n(cap_weight_calc, 3)} kN.</p>
-            <p>Self-weight included in this design run = {n(state.self_weight_kN, 3)} kN.</p>
-            <div class='formula'>P = P<sub>u</sub> + W<sub>cap</sub></div>
-            <p>P = {n(state.loadcase.Pu_kN, 3)} + {n(state.self_weight_kN, 3)} = {n(p_total, 3)} kN.</p>
+            <p>Self-weight included in pile reaction distribution = {n(reaction_state.self_weight_kN, 3)} kN.</p>
+            <div class='formula'>P<sub>s,total</sub> = P<sub>s</sub> + W<sub>cap</sub></div>
+            <p>P<sub>s,total</sub> = {n(reaction_state.loadcase.Pu_kN, 3)} + {n(reaction_state.self_weight_kN, 3)} = {n(p_total, 3)} kN.</p>
             <h3>Step 2 - Pile coordinate properties</h3>
             <div class='formula'>&Sigma;x<sup>2</sup> = &Sigma;x<sub>i</sub><sup>2</sup>, &nbsp; &Sigma;y<sup>2</sup> = &Sigma;y<sub>i</sub><sup>2</sup></div>
             <p>n = {len(state.piles)}, &Sigma;x<sup>2</sup> = {n(sum_x2, 4)} m<sup>2</sup>,
             &Sigma;y<sup>2</sup> = {n(sum_y2, 4)} m<sup>2</sup>.</p>
             <h3>Step 3 - Direct vertical-load share</h3>
-            <div class='formula'>P/n = {n(p_total, 3)} / {pile_count} = {n(base_reaction, 3)} kN per pile</div>
+            <div class='formula'>P<sub>s,total</sub>/n = {n(p_total, 3)} / {pile_count} = {n(base_reaction, 3)} kN per pile</div>
             <h3>Step 4 - Moment distribution terms</h3>
-            <div class='formula'>R<sub>Mx,i</sub> = M<sub>x</sub>y<sub>i</sub> / &Sigma;y<sup>2</sup>, &nbsp;
-            R<sub>My,i</sub> = M<sub>y</sub>x<sub>i</sub> / &Sigma;x<sup>2</sup></div>
-            <p>M<sub>x</sub> = {n(mx, 3)} kN-m, M<sub>y</sub> = {n(my, 3)} kN-m.</p>
+            <div class='formula'>R<sub>Msx,i</sub> = M<sub>sx</sub>y<sub>i</sub> / &Sigma;y<sup>2</sup>, &nbsp;
+            R<sub>Msy,i</sub> = M<sub>sy</sub>x<sub>i</sub> / &Sigma;x<sup>2</sup></div>
+            <p>M<sub>sx</sub> = {n(mx, 3)} kN-m, M<sub>sy</sub> = {n(my, 3)} kN-m.</p>
             <h3>Step 5 - Per-pile reaction calculation</h3>
             <table>
                 <tr>
                     <th>Pile</th><th>x (mm)</th><th>y (mm)</th><th>x (m)</th><th>y (m)</th>
-                    <th>P/n (kN)</th><th>Mx y / &Sigma;y² (kN)</th><th>My x / &Sigma;x² (kN)</th><th>R_i (kN)</th>
+                    <th>Ps/n (kN)</th><th>Msx y / &Sigma;y<sup>2</sup> (kN)</th><th>Msy x / &Sigma;x<sup>2</sup> (kN)</th><th>R_i (kN)</th>
                 </tr>
                 {''.join(pile_calc_rows)}
             </table>
@@ -1330,16 +1515,16 @@ class PileFoundationWindow(QMainWindow):
         <html>
         <head>
         <style>
-            body {{ color: #111827; background: #f8fafc; font-family: "Segoe UI", Arial, sans-serif; font-size: 12px; }}
+            body {{ color: #f8fafc; background: #000000; font-family: "Segoe UI", Arial, sans-serif; font-size: 12px; }}
             h1 {{ font-size: 20px; margin: 4px 0 8px 0; }}
-            h2 {{ font-size: 15px; margin: 18px 0 6px 0; color: #0f172a; }}
+            h2 {{ font-size: 15px; margin: 18px 0 6px 0; color: #f8fafc; }}
             p, li {{ line-height: 1.45; }}
             table {{ border-collapse: collapse; margin: 6px 0 10px 0; width: 100%; }}
-            th, td {{ border: 1px solid #cbd5e1; padding: 5px 7px; }}
-            th {{ background: #334155; color: #f8fafc; }}
-            .formula {{ font-family: "Cambria Math", "Times New Roman", serif; font-size: 15px; background: #eef2ff; border: 1px solid #c7d2fe; padding: 7px 9px; margin: 5px 0; }}
-            .result {{ background: #ecfdf5; border: 1px solid #86efac; padding: 7px 9px; margin: 8px 0; }}
-            .note {{ color: #475569; }}
+            th, td {{ border: 1px solid #334155; padding: 5px 7px; }}
+            th {{ background: #1f2937; color: #f8fafc; }}
+            .formula {{ font-family: "Cambria Math", "Times New Roman", serif; font-size: 15px; color: #f8fafc; background: #111827; border: 1px solid #475569; padding: 7px 9px; margin: 5px 0; }}
+            .result {{ color: #dcfce7; background: #052e16; border: 1px solid #166534; padding: 7px 9px; margin: 8px 0; }}
+            .note {{ color: #cbd5e1; }}
         </style>
         </head>
         <body>
@@ -1428,7 +1613,7 @@ class PileFoundationWindow(QMainWindow):
             self._apply_payload_to_controls(payload)
             groups = payload.get("groups", pd.DataFrame())
             if isinstance(groups, pd.DataFrame) and not groups.empty:
-                self.manual_model.set_dataframe(self._manual_display_dataframe(eng.ensure_group_columns(groups, self.current_geometry())))
+                self._set_manual_tables(eng.ensure_group_columns(groups, self.current_geometry()))
                 self.sap_groups_model.set_dataframe(eng.ensure_group_columns(groups, self.current_geometry()))
             sap_df = payload.get("sap2000_import", pd.DataFrame())
             if isinstance(sap_df, pd.DataFrame) and not sap_df.empty:
