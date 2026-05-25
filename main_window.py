@@ -1575,6 +1575,7 @@ class PileFoundationWindow(QMainWindow):
         ]:
             self.drawing_layout.addWidget(QLabel(title))
             canvas = FigureCanvas(fig)
+            canvas.setMinimumSize(800, 600)
             toolbar = NavigationToolbar(canvas, self)
             self.drawing_layout.addWidget(toolbar)
             self.drawing_layout.addWidget(canvas)
